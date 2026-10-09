@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sobre los datos y el método — Dashboard hoteles Barcelona</title>
+<style>
+  :root{--bg:#f1f5f6;--card:#fff;--ink:#14262b;--ink2:#53666b;--muted:#7d8d91;--line:#dbe4e6;--accent:#1f7a8c;--accent-soft:#dcecef;--dark:#0f2a33}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:16px;line-height:1.55}
+  header{background:var(--dark);color:#fff;padding:18px 28px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+  header h1{margin:0;font-size:22px;font-weight:600}
+  header p{margin:4px 0 0;color:#b7cdd2;font-size:13px}
+  header nav a{color:#9fd3de;text-decoration:none;font-size:14px;margin-left:18px}
+  header nav a:hover{text-decoration:underline}
+  main{max-width:900px;margin:0 auto;padding:26px 28px 50px}
+  h2{font-size:20px;margin:34px 0 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:12px 0}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--ink2);font-weight:600}
+  code{background:var(--accent-soft);padding:1px 5px;border-radius:4px;font-size:14px}
+  a{color:var(--accent)}
+  li{margin-bottom:6px}
+  .note{background:var(--accent-soft);border-radius:8px;padding:12px 16px;font-size:15px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Sobre los datos y el método</h1>
+    <p>Dashboard de hoteles y alojamientos turísticos en Barcelona</p>
+  </div>
+  <nav><a href="index.html">Dashboard</a><a href="sobre.html">Sobre los datos y el método</a></nav>
+</header>
+
+<main>
+  <p>Este dashboard muestra dónde se concentran los establecimientos hoteleros de Barcelona. Se ha creado con ayuda de una herramienta de IA a partir de un dataset abierto, sin servidor ni base de datos.</p>
+
+  <h2>1. Los datos</h2>
+  <div class="card">
+    <table>
+      <tr><th>Dataset</th><td>Hoteles de la ciudad de Barcelona (listado y ubicación)</td></tr>
+      <tr><th>Publicador</th><td>Ajuntament de Barcelona — Open Data BCN</td></tr>
+      <tr><th>Enlace</th><td><a href="https://opendata-ajuntament.barcelona.cat/data/es/dataset/allotjaments-hotels" target="_blank">opendata-ajuntament.barcelona.cat/data/es/dataset/allotjaments-hotels</a></td></tr>
+      <tr><th>Archivo</th><td><code>opendatabcn_allotjament_hotels-csv.csv</code></td></tr>
+      <tr><th>Licencia</th><td>Creative Commons Attribution 4.0 (CC BY 4.0)</td></tr>
+      <tr><th>Límites de barrio</th><td><code>barris.geojson</code> — <a href="https://github.com/martgnz/bcn-geodata" target="_blank">martgnz/bcn-geodata</a> (73 barrios)</td></tr>
+    </table>
+  </div>
+
+  <h2>2. Columnas utilizadas</h2>
+  <div class="card">
+    <table>
+      <tr><th>Columna</th><th>Uso en el dashboard</th></tr>
+      <tr><td><code>register_id</code></td><td>Identifica cada establecimiento y elimina duplicados</td></tr>
+      <tr><td><code>name</code></td><td>Nombre en la capa de puntos</td></tr>
+      <tr><td><code>addresses_neighborhood_id</code>, <code>addresses_neighborhood_name</code></td><td>Unión con el mapa (<code>BARRI</code> en el GeoJSON)</td></tr>
+      <tr><td><code>addresses_district_id</code>, <code>addresses_district_name</code></td><td>Filtro y gráfico por distrito</td></tr>
+      <tr><td><code>geo_epgs_4326_lat</code>, <code>geo_epgs_4326_lon</code></td><td>Coordenadas WGS84 para la capa de puntos</td></tr>
+      <tr><td><code>secondary_filters_name</code></td><td>Filtro por tipo o categoría, si el archivo la trae</td></tr>
+    </table>
+  </div>
+
+  <h2>3. Método</h2>
+  <ol>
+    <li>Cada establecimiento cuenta una sola vez (se descartan filas repetidas con el mismo <code>register_id</code>). Se cuentan por barrio.</li>
+    <li>La <b>densidad</b> divide el nº de establecimientos por la superficie del barrio (propiedad <code>AREA</code> del GeoJSON, en m², pasada a km²).</li>
+    <li>Si una fila no trae código de barrio, se asigna con sus coordenadas comprobando en qué polígono del GeoJSON cae.</li>
+    <li>El mapa usa clases con cortes fijos y una escala de un solo color (claro = pocos, oscuro = muchos). El cálculo se hace en el navegador con JavaScript (Leaflet, Chart.js y PapaParse).</li>
+  </ol>
+
+  <h2>4. Limitaciones</h2>
+  <ul>
+    <li>Cuenta establecimientos, no plazas ni habitaciones: un hotel pequeño pesa igual que uno grande.</li>
+    <li>Según el dataset, puede no incluir otros alojamientos como pensiones, albergues o apartamentos turísticos, que se publican en datasets separados.</li>
+    <li>Los valores absolutos favorecen a barrios grandes; la densidad por km² ayuda a compararlos, pero conviene normalizar también por población.</li>
+    <li>El GeoJSON de barrios es un proyecto de código abierto, no una fuente oficial.</li>
+  </ul>
+
+  <h2>5. Cómo reutilizarlo</h2>
+  <div class="note">
+    <b>En tu ordenador:</b> abre <code>index.html</code> con doble clic y selecciona el CSV cuando la página lo pida.<br>
+    <b>En un servidor web:</b> sube la carpeta con <code>data/opendatabcn_allotjament_hotels-csv.csv</code> y <code>data/barris.geojson</code>; los datos se cargarán solos.
+  </div>
+
+  <p style="margin-top:34px;font-size:13px;color:var(--muted)">Datos: © Ajuntament de Barcelona, CC BY 4.0. Elaborado con asistencia de IA.</p>
+</main>
+</body>
+</html>

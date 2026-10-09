@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hoteles y alojamientos turísticos en Barcelona</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root{--bg:#f1f5f6;--card:#fff;--ink:#14262b;--ink2:#53666b;--line:#dbe4e6;--main:#1f7a8c;--soft:#dcecef;--dark:#0f2a33}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,Roboto,Arial,sans-serif;font-size:15px}
+  header{background:var(--dark);color:#fff;padding:18px 24px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px}
+  header h1{margin:0;font-size:22px;font-weight:600}
+  header p{margin:4px 0 0;color:#b7cdd2;font-size:13px}
+  header nav a{color:#9fd3de;text-decoration:none;font-size:14px;margin-left:16px}
+  header nav a:hover{text-decoration:underline}
+  main{max-width:1300px;margin:0 auto;padding:18px 24px 32px}
+  .bar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;margin-bottom:16px}
+  .bar label{font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:8px}
+  .bar .file{background:var(--main);color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600}
+  .file input{display:none}
+  select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;max-width:260px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:13px;border:0;background:none;padding:6px 11px;cursor:pointer;color:var(--ink2)}
+  .seg button.on{background:var(--main);color:#fff}
+  #msg{font-size:13px;color:var(--ink2)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi b{display:block;font-size:28px;line-height:1.15;color:var(--ink)}
+  .kpi span{font-size:13px;color:var(--ink2)}
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h2{font-size:15px;margin:0 0 10px;font-weight:600}
+  #map{height:540px;border-radius:8px}
+  .right{display:grid;grid-template-rows:1fr 1fr;gap:14px}
+  .chart{position:relative;height:230px}
+  .legend,.info{background:#fff;padding:8px 10px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:12px;line-height:18px}
+  .legend i{display:inline-block;width:14px;height:12px;margin-right:6px;vertical-align:-1px;border:1px solid #ccc}
+  .info{font-size:13px;min-width:180px}
+  footer{max-width:1300px;margin:0 auto;padding:0 24px 28px;font-size:12px;color:var(--ink2)}
+  .empty #content{opacity:.35;pointer-events:none}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}#map{height:400px}}
+</style>
+</head>
+<body class="empty">
+<header>
+  <div>
+    <h1>Hoteles y alojamientos turísticos en Barcelona</h1>
+    <p>Establecimientos hoteleros por barrio y distrito</p>
+  </div>
+  <nav><a href="index.html">Dashboard</a><a href="sobre.html">Sobre los datos y el método</a></nav>
+</header>
+
+<main>
+  <div class="bar">
+    <label class="file">📂 Seleccionar opendatabcn_allotjament_hotels-csv.csv
+      <input type="file" id="csvInput" accept=".csv">
+    </label>
+    <span id="msg">Cargando datos…</span>
+  </div>
+
+  <div id="content">
+    <div class="bar">
+      <label>Distrito <select id="fDist"><option value="ALL">Todos los distritos</option></select></label>
+      <label id="catWrap" style="display:none">Tipo <select id="fCat"><option value="ALL">Todos los tipos</option></select></label>
+      <label>Indicador
+        <span class="seg" id="fMetric">
+          <button data-m="n" class="on">Nº de establecimientos</button>
+          <button data-m="dens">Establecimientos por km²</button>
+        </span>
+      </label>
+      <label><input type="checkbox" id="fPoints"> Ver cada establecimiento</label>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><b id="kN">–</b><span>establecimientos</span></div>
+      <div class="kpi"><b id="kB">–</b><span>barrios con al menos uno</span></div>
+      <div class="kpi"><b id="kL">–</b><span id="kLs">barrio con más establecimientos</span></div>
+      <div class="kpi"><b id="kT">–</b><span>de los establecimientos en los 5 barrios con más</span></div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h2 id="mapTitle">Mapa por barrio</h2><div id="map"></div></div>
+      <div class="right">
+        <div class="card"><h2 id="topTitle">Top 10 de barrios</h2><div class="chart"><canvas id="cTop"></canvas></div></div>
+        <div class="card"><h2 id="distTitle">Total por distrito</h2><div class="chart"><canvas id="cDist"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>Fuente: Open Data BCN (Ajuntament de Barcelona), CC BY 4.0 · Límites de barrio: martgnz/bcn-geodata · Mapa base © OpenStreetMap, © CARTO</footer>
+
+<script>
+const CSV_LOCAL     = "data/opendatabcn_allotjament_hotels-csv.csv";
+const GEOJSON_LOCAL = "data/barris.geojson";
+const GEOJSON_URL   = "https://raw.githubusercontent.com/martgnz/bcn-geodata/master/barris/barris.geojson";
+const RAMP = ["#eef5f6","#cfe5e9","#a4cfd7","#70b2c0","#3f93a6","#1f7a8c","#145566","#0b3544"];
+const METRICS = {
+  n:    {label:"Nº de establecimientos",    unit:"establecimientos",    breaks:[1,3,6,10,18,30,50]},
+  dens: {label:"Establecimientos por km²",  unit:"establecimientos/km²", breaks:[1,3,8,15,30,50,80]}
+};
+const fmt  = n => n.toLocaleString("es-ES", {maximumFractionDigits:0, useGrouping:"always"});
+const fmt1 = n => n.toLocaleString("es-ES", {minimumFractionDigits:1, maximumFractionDigits:1});
+const pad2 = s => String(s ?? "").trim().padStart(2, "0");
+
+let geo, rows = [], barris = {}, dists = {}, hasCat = false;
+let state = {dist:"ALL", cat:"ALL", metric:"n", points:false};
+let map, geoLayer, pointLayer, info, chTop, chDist;
+
+function msg(t){ document.getElementById("msg").textContent = t; }
+
+// 1. Cargar el GeoJSON de barrios (primero local, si no, desde GitHub)
+function loadGeo(){
+  return fetch(GEOJSON_LOCAL).then(r => { if(!r.ok) throw 0; return r.json(); })
+    .catch(() => fetch(GEOJSON_URL).then(r => r.json()));
+}
+const geoReady = loadGeo().then(g => { geo = g; buildMap(); buildCharts(); })
+  .catch(() => msg("No se ha podido cargar el GeoJSON de barrios. Comprueba la conexión a internet."));
+
+// 2. Intentar cargar el CSV automáticamente (solo funciona en un servidor web)
+geoReady.then(() => fetch(CSV_LOCAL).then(r => { if(!r.ok) throw 0; return r.text(); })
+  .then(txt => parseCSV(txt, "hoteles"))
+  .catch(() => msg("Selecciona el archivo CSV descargado de Open Data BCN para empezar.")));
+
+// 3. O leer el CSV elegido por el usuario
+document.getElementById("csvInput").addEventListener("change", e => {
+  const file = e.target.files[0]; if (!file) return;
+  msg("Leyendo " + file.name + "…");
+  geoReady.then(() => parseCSV(file, file.name));
+});
+
+function parseCSV(src, name){
+  Papa.parse(src, {
+    header:true, skipEmptyLines:true, transformHeader:h => h.replace(/^\uFEFF/, "").trim(),
+    complete: res => {
+      if (!res.data.length) { msg("El archivo está vacío."); return; }
+      if (!prepare(res.data)) { msg("No encuentro las columnas de barrio ni de coordenadas. ¿Es el CSV de hoteles de Open Data BCN?"); return; }
+      update();
+      document.body.classList.remove("empty");
+      msg(`${name}: ${fmt(rows.length)} establecimientos cargados.`);
+    }
+  });
+}
+
+// 4. Utilidades: buscar columnas y asignar barrio
+function findCol(row, candidates){
+  const keys = Object.keys(row), low = keys.map(k => k.toLowerCase());
+  for (const c of candidates){ const i = low.indexOf(c); if (i >= 0) return keys[i]; }
+  return null;
+}
+function inRing(x, y, ring){
+  let ins = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+function barriByPoint(lon, lat){
+  for (const f of geo.features){
+    const g = f.geometry, polys = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+    for (const p of polys) if (inRing(lon, lat, p[0])) return pad2(f.properties.BARRI);
+  }
+  return "";
+}
+
+// 5. Preparar los datos: limpiar, quitar duplicados y agregar por barrio
+function prepare(data){
+  const r0 = data[0];
+  const cId   = findCol(r0, ["register_id","id"]);
+  const cName = findCol(r0, ["name","nom"]);
+  const cBid  = findCol(r0, ["addresses_neighborhood_id","codi_barri"]);
+  const cBnom = findCol(r0, ["addresses_neighborhood_name","nom_barri"]);
+  const cDid  = findCol(r0, ["addresses_district_id","codi_districte"]);
+  const cDnom = findCol(r0, ["addresses_district_name","nom_districte"]);
+  const cLat  = findCol(r0, ["geo_epgs_4326_lat","geo_epsg_4326_lat","latitud_y","lat"]);
+  const cLon  = findCol(r0, ["geo_epgs_4326_lon","geo_epsg_4326_lon","longitud_x","lon"]);
+  const cCat  = findCol(r0, ["secondary_filters_name","categoria","tipus"]);
+  if (!cBid && !(cLat && cLon)) return false;
+
+  // Una fila por establecimiento (el CSV puede repetir el id si hay varios atributos)
+  const seen = new Set(), clean = [];
+  data.forEach((r, i) => {
+    const key = cId && r[cId] ? r[cId] : "fila" + i;
+    if (seen.has(key)) return; seen.add(key); clean.push(r);
+  });
+
+  rows = clean.map(r => {
+    const lat = cLat ? parseFloat(r[cLat]) : NaN, lon = cLon ? parseFloat(r[cLon]) : NaN;
+    let barri = cBid && String(r[cBid] ?? "").trim() ? pad2(r[cBid]) : "";
+    if (!barri && isFinite(lat) && isFinite(lon)) barri = barriByPoint(lon, lat);
+    return {name: cName ? (r[cName]||"").trim() : "", barri, lat, lon,
+      dist: cDid ? pad2(r[cDid]) : "", distNom: cDnom ? (r[cDnom]||"").trim() : "",
+      barriNom: cBnom ? (r[cBnom]||"").trim() : "", cat: cCat ? (r[cCat]||"").trim() : ""};
+  });
+
+  // Distrito: si el CSV no lo trae, se toma del GeoJSON
+  barris = {};
+  geo.features.forEach(f => {
+    const p = f.properties;
+    barris[pad2(p.BARRI)] = {name:p.NOM, dist:pad2(p.DISTRICTE), area:p.AREA/1e6, n:0, dens:0};
+  });
+  rows.forEach(r => { if (!r.dist && barris[r.barri]) r.dist = barris[r.barri].dist; });
+
+  dists = {};
+  rows.forEach(r => { if (r.dist && r.distNom) dists[r.dist] = r.distNom; });
+  const DIST_NOMS = {"01":"Ciutat Vella","02":"Eixample","03":"Sants-Montjuïc","04":"Les Corts","05":"Sarrià-Sant Gervasi","06":"Gràcia","07":"Horta-Guinardó","08":"Nou Barris","09":"Sant Andreu","10":"Sant Martí"};
+  rows.forEach(r => { if (r.dist && !dists[r.dist]) dists[r.dist] = DIST_NOMS[r.dist] || r.dist; });
+
+  document.getElementById("fDist").innerHTML = '<option value="ALL">Todos los distritos</option>' +
+    Object.keys(dists).sort().map(k => `<option value="${k}">${k} · ${dists[k]}</option>`).join("");
+  state.dist = "ALL";
+
+  const cats = [...new Set(rows.map(r => r.cat).filter(Boolean))].sort();
+  hasCat = cats.length > 1 && cats.length <= 30;
+  document.getElementById("catWrap").style.display = hasCat ? "" : "none";
+  document.getElementById("fCat").innerHTML = '<option value="ALL">Todos los tipos</option>' +
+    cats.map(c => `<option value="${c.replace(/"/g,"&quot;")}">${c}</option>`).join("");
+  state.cat = "ALL";
+  return true;
+}
+
+function filtered(){ return rows.filter(r => state.cat === "ALL" || r.cat === state.cat); }
+function aggregate(){
+  Object.values(barris).forEach(b => b.n = 0);
+  filtered().forEach(r => { const b = barris[r.barri]; if (b) b.n++; });
+  Object.values(barris).forEach(b => b.dens = b.n / b.area);
+}
+
+// 6. Mapa coroplético (Leaflet)
+function color(v, m){
+  if (!v) return "#ffffff";
+  const br = METRICS[m].breaks; let i = 0;
+  while (i < br.length && v >= br[i]) i++;
+  return RAMP[Math.min(i, RAMP.length - 1)];
+}
+function style(f){
+  const b = barris[pad2(f.properties.BARRI)] || {n:0,dens:0,dist:""};
+  const dim = state.dist !== "ALL" && b.dist !== state.dist;
+  return {fillColor: color(b[state.metric], state.metric), fillOpacity: dim ? .15 : .85, color:"#fff", weight:1};
+}
+function buildMap(){
+  map = L.map("map").setView([41.395, 2.16], 12);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    {attribution:"© OpenStreetMap © CARTO", maxZoom:18}).addTo(map);
+  geoLayer = L.geoJSON(geo, {style, onEachFeature:(f, layer) => layer.on({
+    mouseover: e => { e.target.setStyle({weight:2.5, color:"#14262b"}); e.target.bringToFront(); info.update(barris[pad2(f.properties.BARRI)]); },
+    mouseout:  e => { geoLayer.resetStyle(e.target); info.update(); },
+    click:     e => map.fitBounds(e.target.getBounds(), {maxZoom:15})
+  })}).addTo(map);
+  map.fitBounds(geoLayer.getBounds());
+
+  info = L.control({position:"topright"});
+  info.onAdd = function(){ this._div = L.DomUtil.create("div", "info"); this.update(); return this._div; };
+  info.update = function(b){
+    this._div.innerHTML = b && b.name
+      ? `<b>${b.name}</b><br>Establecimientos: <b>${fmt(b.n || 0)}</b><br>Por km²: <b>${fmt1(b.dens || 0)}</b>`
+      : "Pasa el ratón por un barrio";
+  };
+  info.addTo(map);
+
+  const legend = L.control({position:"bottomright"});
+  legend.onAdd = () => { const d = L.DomUtil.create("div", "legend"); d.id = "legend"; return d; };
+  legend.addTo(map);
+  pointLayer = L.layerGroup();
+}
+function updateLegend(){
+  const m = METRICS[state.metric], br = m.breaks;
+  let h = `<b>${m.label}</b><br><i style="background:#fff"></i>0<br>`;
+  br.forEach((lo, i) => h += `<i style="background:${RAMP[i+1]}"></i>${fmt(lo)}${br[i+1] ? "–" + fmt(br[i+1]-1) : "+"}<br>`);
+  document.getElementById("legend").innerHTML = h;
+}
+
+// 7. Gráficos (Chart.js)
+function barOpts(horizontal){
+  return {indexAxis: horizontal ? "y" : "x", responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:false}, tooltip:{callbacks:{label:c => " " + fmt(c.raw)}}},
+    scales:{x:{grid:{display:horizontal}, ticks:{font:{size:11}}}, y:{grid:{display:!horizontal}, ticks:{font:{size:11}}}},
+    elements:{bar:{borderRadius:4}}};
+}
+function buildCharts(){
+  chTop  = new Chart(document.getElementById("cTop"),  {type:"bar", data:{labels:[], datasets:[{data:[], backgroundColor:"#1f7a8c", maxBarThickness:18}]}, options:barOpts(true)});
+  chDist = new Chart(document.getElementById("cDist"), {type:"bar", data:{labels:[], datasets:[{data:[], backgroundColor:[], maxBarThickness:34}]}, options:barOpts(false)});
+}
+
+// 8. Actualizar todo cuando cambia un filtro
+function update(){
+  if (!rows.length) return;
+  aggregate();
+  const m = state.metric, M = METRICS[m];
+  const all = filtered();
+  const sel = all.filter(r => state.dist === "ALL" || r.dist === state.dist);
+  const bs  = Object.values(barris).filter(b => state.dist === "ALL" || b.dist === state.dist);
+
+  const N = sel.length;
+  const ranked = [...bs].sort((a, b) => b.n - a.n);
+  const top5 = ranked.slice(0, 5).reduce((s, b) => s + b.n, 0);
+  const withAny = bs.filter(b => b.n > 0).length;
+  document.getElementById("kN").textContent = fmt(N);
+  document.getElementById("kB").textContent = `${withAny} de ${bs.length}`;
+  document.getElementById("kL").textContent = ranked[0] && ranked[0].n ? ranked[0].name : "–";
+  document.getElementById("kLs").textContent = ranked[0] && ranked[0].n ? `barrio con más establecimientos (${fmt(ranked[0].n)})` : "barrio con más establecimientos";
+  const inBarris = ranked.reduce((s, b) => s + b.n, 0);
+  document.getElementById("kT").textContent = inBarris ? Math.round(100 * top5 / inBarris) + " %" : "–";
+
+  geoLayer.setStyle(style); updateLegend();
+  document.getElementById("mapTitle").textContent = M.label + " por barrio";
+  const layers = geoLayer.getLayers().filter(l => state.dist === "ALL" || pad2(l.feature.properties.DISTRICTE) === state.dist);
+  map.fitBounds(L.featureGroup(layers).getBounds(), {maxZoom:15});
+
+  pointLayer.clearLayers();
+  if (state.points){
+    const canvas = L.canvas();
+    sel.forEach(r => { if (isFinite(r.lat) && isFinite(r.lon))
+      L.circleMarker([r.lat, r.lon], {renderer:canvas, radius:3.5, weight:.8, color:"#0b3544", fillColor:"#fff", fillOpacity:.9})
+        .bindTooltip(`${r.name || "Establecimiento"}${r.cat ? " · " + r.cat : ""}`).addTo(pointLayer); });
+    pointLayer.addTo(map);
+  } else map.removeLayer(pointLayer);
+
+  const top = [...bs].sort((a, b) => b[m] - a[m]).slice(0, 10);
+  chTop.data.labels = top.map(b => b.name.length > 26 ? b.name.slice(0, 25) + "…" : b.name);
+  chTop.data.datasets[0].data = top.map(b => m === "dens" ? +b[m].toFixed(1) : b[m]);
+  document.getElementById("topTitle").textContent = "Top 10 de barrios · " + M.unit;
+  chTop.update();
+
+  const agg = {};
+  all.forEach(r => { if (r.dist) agg[r.dist] = (agg[r.dist] || 0) + 1; });
+  const keys = Object.keys(agg).sort();
+  chDist.data.labels = keys.map(k => dists[k]);
+  chDist.data.datasets[0].data = keys.map(k => agg[k]);
+  chDist.data.datasets[0].backgroundColor = keys.map(k => state.dist === "ALL" || k === state.dist ? "#1f7a8c" : "#cfdadd");
+  document.getElementById("distTitle").textContent = "Total por distrito · establecimientos";
+  chDist.update();
+}
+
+// 9. Filtros
+document.getElementById("fDist").addEventListener("change", e => { state.dist = e.target.value; update(); });
+document.getElementById("fCat").addEventListener("change", e => { state.cat = e.target.value; update(); });
+document.querySelectorAll("#fMetric button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#fMetric button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); state.metric = b.dataset.m; update();
+}));
+document.getElementById("fPoints").addEventListener("change", e => { state.points = e.target.checked; update(); });
+</script>
+</body>
+</html>
